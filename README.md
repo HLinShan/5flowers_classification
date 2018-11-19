@@ -13,10 +13,12 @@ flowerstest.py
    train acc: 0.857244
    validation loss: 47.595419
    validation acc: 0.706250
+   
 2.resnet model
   resnet folder /resnetclassification.py
   iteration ===100000
   validation acc: 0.77
+  
 3.resnet model with MIL
   resnet folder /resnetclassification_mil.py
 
