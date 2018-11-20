@@ -22,8 +22,8 @@ from skimage import io
 # red_phase_128_180_test_fold4_test.tfrecords
 
 flags = tf.flags
-flags.DEFINE_string("tfrecord_filename_train", "./tfrecordsfile/train.tfrecords", "The name of dataset []")
-flags.DEFINE_string("tfrecord_filename_test", "./tfrecordsfile/validation.tfrecords", "The name of dataset []")
+flags.DEFINE_string("tfrecord_filename_train", "./tfrecordsfile/train_one.tfrecords", "The name of dataset []")
+flags.DEFINE_string("tfrecord_filename_test", "./tfrecordsfile/validation_one.tfrecords", "The name of dataset []")
 flags.DEFINE_string("tfrecord_filename_val", "./data/tfrecords/cam_f5_val", "The name of dataset []")  # ckptnum
 flags.DEFINE_integer('BATCH_SIZE', 4, 'The size of batch images [128]')
 flags.DEFINE_integer('ckptnum', 100000, 'The size of batch images [128]')
@@ -39,15 +39,16 @@ flags.DEFINE_integer("fil_num_d", 4, "width of image  . [1]")
 flags.DEFINE_integer("repeat_B", 4, "width of image  . [1]")
 flags.DEFINE_boolean('IS_TRAIN', False, 'True for train, else test. [True]')
 flags.DEFINE_boolean('BN', True, 'True for train, else test. [True]')
-flags.DEFINE_boolean('IS_CIFAR10', True, 'True for train, else test. [True]')
+flags.DEFINE_boolean('IS_CIFAR10', False, 'True for train, else test. [True]')
 flags.DEFINE_boolean('L2', True, 'True for train, else test. [True]')
 flags.DEFINE_boolean('LOAD_MODEL', True, 'True for load checkpoint and continue training. [True]')
 # flags.DEFINE_string('MODEL_DIR', "%s"%(path),'If LOAD_MODEL, provide the MODEL_DIR. [./model/BEGAN/]')
 flags.DEFINE_string('MODEL_DIR', './', 'If LOAD_MODEL, provide the MODEL_DIR. [./model/BEGAN/]')
 flags.DEFINE_integer("sort", 5, "piece of sort out  . [1]")
 flags.DEFINE_integer("output", 5, "the output of resnet  . [1]")
-flags.DEFINE_string('model_path', "./models/", 'If LOAD_MODEL, provide the MODEL_DIR')
+flags.DEFINE_string('model_path', "./miml_model/", 'If LOAD_MODEL, provide the MODEL_DIR')
 flags.DEFINE_boolean('IS_TEST_DATASET', True, 'True for test_data, else train_data. [True]')
+flags.DEFINE_integer("sub_concept_k", 20, "the deepmiml k sub-concept  . [1]")
 FLAGS = flags.FLAGS
 
 GPU_ID = FLAGS.NUM_GPUS  # get_gpu_id(gpu_num = FLAGS.NUM_GPUS)
@@ -90,11 +91,60 @@ def inference(images, batch_size=FLAGS.BATCH_SIZE, is_train=True, reuse=False, n
         x = infer_block(x, FLAGS.fil_num_2, name=name, is_train=is_train, BN=BN)
         print x.shape
 
-        x = Global_Average_Pooling(x, name='Global_Average_Pooling_1')
-        print x.shape
-        #        x = linear(tf.reshape(x,[FLAGS.BATCH_SIZE,-1]),64,name='linear_1')
-        #        print x.shape
-        x = linear(tf.reshape(x, [FLAGS.BATCH_SIZE, -1]), FLAGS.output, name='linear_2')
+
+        # ==========================
+        # "4 38 38 64"
+        print "begin the  miml training "
+        # ===begin the miml================
+        b = x.shape[0]
+        print "b:", b
+        h = x.shape[1]
+        w = x.shape[2]
+        c = x.shape[3]
+        n_instances = h * w
+        L = FLAGS.CLASS
+        K = FLAGS.sub_concept_k
+        MIML_FIRST_LAYER_NAME = "miml_first_layer"
+        MIML_CUBE_LAYER_NAME = "miml_cube"
+        MIML_TABLE_LAYER_NAME = "miml_table"
+        MIML_OUTPUT_LAYER_NAME = "miml_output"
+        # conv38*38*64===>38*38*100(5*20)
+
+        x = Conv2d(x, 100, k_h=1, k_w=1, strides=[1, 1, 1, 1], name=MIML_FIRST_LAYER_NAME,
+                   is_train=is_train, BN=BN)
+        print type(x)
+
+        print  "conv1", x.shape
+        # 4*5*20*(n_instaances)
+        # shape -> (n_bags, L, K, n_instances)
+        x = tf.reshape(x, [4, 5, 20, -1], name=MIML_CUBE_LAYER_NAME)
+
+        # maxpooling
+        # shape -> (n_bags, L, 1, n_instances)
+        x = MaxPooling(x, ksize=[1, 1, 20, 1], strides=[1, 1, 20, 1],
+                       padding='SAME', name='MaxPooling3')
+        # softmax
+        # reshape(4,5,1444)
+        x = tf.reshape(x, [4, 5, -1])
+        # transpose(4,1444,5)
+        x = tf.transpose(x, perm=[0, 2, 1])
+        # # activation softmax(4,1444,5)
+        x = tf.nn.softmax(x)
+        # # transpose(4,5,1444)
+        x = tf.transpose(x, perm=[0, 2, 1])
+        # # reshape(4,5,1444,1)
+        x = tf.reshape(x, [4, 5, 1444, 1], name=MIML_TABLE_LAYER_NAME)
+        # # reshape->(batch,L,1,1)
+        # x = tf.maximum()=>(4,5,1,1)
+        x = MaxPooling(x, ksize=[1, 1, 4, 1], strides=[1, 1, 4, 1],
+                       padding='SAME', name='MaxPooling4')
+        x = MaxPooling(x, ksize=[1, 1, 19, 1], strides=[1, 1, 19, 1],
+                       padding='SAME', name='MaxPooling5')
+        x = MaxPooling(x, ksize=[1, 1, 19, 1], strides=[1, 1, 19, 1],
+                       padding='SAME', name='MaxPooling6')
+        print "xx", x.shape
+
+        x = linear(tf.reshape(x, [FLAGS.BATCH_SIZE, -1]), FLAGS.output, name=MIML_OUTPUT_LAYER_NAME)
         softmax_x = tf.nn.softmax(x)
         print x.shape
         return x, softmax_x
@@ -166,6 +216,7 @@ def train(BN=FLAGS.BN, is_train=True):
     loss_1 = sofmax_losses(train_labels, train_logits)
     print "loss_shape"
     print loss_1.shape
+    # compute with softmax
     correct_prediction = tf.equal(tf.arg_max(prediction, 1), tf.arg_max(train_labels, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
 
@@ -404,7 +455,7 @@ def read_and_decode_image_label():
         serialized_example,
         features={
             'label': tf.FixedLenFeature([], tf.int64),
-            'img_raw': tf.FixedLenFeature([], tf.string),
+            'raw_img': tf.FixedLenFeature([], tf.string),
             # 'row_img': tf.FixedLenFeature([], tf.int64),
             # 'col_img': tf.FixedLenFeature([], tf.int64),
         }
@@ -419,7 +470,7 @@ def read_and_decode_image_label():
     else:
         img_label = tf.one_hot(img_label, FLAGS.sort, on_value=1, off_value=None, axis=-1)
 
-    img_raw = features['img_raw']
+    img_raw = features['raw_img']
     img_raw = tf.decode_raw(img_raw, tf.float32)
     img_raw = tf.reshape(img_raw, [150, 150, 3])
     img_raw = tf.cast(img_raw, dtype=tf.float32)
@@ -447,8 +498,8 @@ def read_and_decode_image_label():
 if __name__ == '__main__':
 
     if FLAGS.IS_TRAIN == True:
-        log_dir = osp.join('logs', FLAGS.MODEL_DIR)
-        model_dir = osp.join('models', FLAGS.MODEL_DIR)
+        log_dir = osp.join('miml_logs', FLAGS.MODEL_DIR)
+        model_dir = osp.join('miml_models', FLAGS.MODEL_DIR)
         # test_dir = osp.join('test', FLAGS.MODEL_DIR)
         # sample_dir = osp.join('samples', FLAGS.MODEL_DIR)
 

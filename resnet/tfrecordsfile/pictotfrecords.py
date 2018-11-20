@@ -11,8 +11,8 @@ path='/home/jack/sansan_progress/5flowers/flowers/'
 
 
 #将所有的图片resize成100*100
-w=100
-h=100
+w=150
+h=150
 c=3
 ratio=0.3
 
@@ -66,7 +66,7 @@ def convert(images,labels,name):
         #将一个样例转化为Example Protocol Buffer，并将所有需要的信息写入数据结构
         example = tf.train.Example(features=tf.train.Features(feature={
             'label': _int64_feature(int(labels[i])),
-            'image_raw': _bytes_feature(img_raw)}))
+            'raw_img': _bytes_feature(img_raw)}))
         #将example写入TFRecord文件
         writer.write(example.SerializeToString())
     writer.close()

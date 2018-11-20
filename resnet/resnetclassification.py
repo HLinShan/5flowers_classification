@@ -22,14 +22,14 @@ from skimage import io
 # red_phase_128_180_test_fold4_test.tfrecords
 
 flags = tf.flags
-flags.DEFINE_string("tfrecord_filename_train", "./tfrecordsfile/train.tfrecords", "The name of dataset []")
-flags.DEFINE_string("tfrecord_filename_test", "./tfrecordsfile/validation.tfrecords", "The name of dataset []")
+flags.DEFINE_string("tfrecord_filename_train", "./tfrecordsfile/train_one.tfrecords", "The name of dataset []")
+flags.DEFINE_string("tfrecord_filename_test", "./tfrecordsfile/validation_one.tfrecords", "The name of dataset []")
 flags.DEFINE_string("tfrecord_filename_val", "./data/tfrecords/cam_f5_val", "The name of dataset []")  # ckptnum
 flags.DEFINE_integer('BATCH_SIZE', 4, 'The size of batch images [128]')
 flags.DEFINE_integer('ckptnum', 100000, 'The size of batch images [128]')
 flags.DEFINE_integer('iterations', 100000, 'The size of batch images [128]')
 flags.DEFINE_float('LR', 0.0001, 'Learning rate of for Optimizer [3e-3]')
-flags.DEFINE_integer('NUM_GPUS', 0, 'The number of GPU to use [1]')
+flags.DEFINE_integer('NUM_GPUS', 1, 'The number of GPU to use [1]')
 flags.DEFINE_integer('CLASS', 5, 'The number of the output classes. [5]')
 flags.DEFINE_integer("size", 150, "width of image  . [1]")
 flags.DEFINE_integer("fil_num", 16, "width of image  . [1]")
@@ -37,7 +37,7 @@ flags.DEFINE_integer("fil_num_2", 64, "width of image  . [1]")
 
 flags.DEFINE_integer("fil_num_d", 4, "width of image  . [1]")
 flags.DEFINE_integer("repeat_B", 4, "width of image  . [1]")
-flags.DEFINE_boolean('IS_TRAIN', False, 'True for train, else test. [True]')
+flags.DEFINE_boolean('IS_TRAIN', True, 'True for train, else test. [True]')
 flags.DEFINE_boolean('BN', True, 'True for train, else test. [True]')
 flags.DEFINE_boolean('IS_CIFAR10', True, 'True for train, else test. [True]')
 flags.DEFINE_boolean('L2', True, 'True for train, else test. [True]')
@@ -48,6 +48,7 @@ flags.DEFINE_integer("sort", 5, "piece of sort out  . [1]")
 flags.DEFINE_integer("output", 5, "the output of resnet  . [1]")
 flags.DEFINE_string('model_path', "./models/", 'If LOAD_MODEL, provide the MODEL_DIR')
 flags.DEFINE_boolean('IS_TEST_DATASET', True, 'True for test_data, else train_data. [True]')
+flags.DEFINE_integer("sub_concept_k", 20, "the deepmiml k sub-concept  . [1]")
 FLAGS = flags.FLAGS
 
 GPU_ID = FLAGS.NUM_GPUS  # get_gpu_id(gpu_num = FLAGS.NUM_GPUS)
@@ -404,7 +405,7 @@ def read_and_decode_image_label():
         serialized_example,
         features={
             'label': tf.FixedLenFeature([], tf.int64),
-            'img_raw': tf.FixedLenFeature([], tf.string),
+            'raw_img': tf.FixedLenFeature([], tf.string),
             # 'row_img': tf.FixedLenFeature([], tf.int64),
             # 'col_img': tf.FixedLenFeature([], tf.int64),
         }
@@ -419,7 +420,7 @@ def read_and_decode_image_label():
     else:
         img_label = tf.one_hot(img_label, FLAGS.sort, on_value=1, off_value=None, axis=-1)
 
-    img_raw = features['img_raw']
+    img_raw = features['raw_img']
     img_raw = tf.decode_raw(img_raw, tf.float32)
     img_raw = tf.reshape(img_raw, [150, 150, 3])
     img_raw = tf.cast(img_raw, dtype=tf.float32)

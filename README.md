@@ -19,4 +19,8 @@ flowerstest.py
   validation acc: 0.77
 3.resnet model with MIL
   resnet folder /resnetclassification_mil.py
+  deep_miml.py example:with two version keras and tensorflow version the construction
+  iteration ===100000
+  validation acc: 0.174
+  
 
